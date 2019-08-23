@@ -67,7 +67,7 @@ class FlowdockReceiver(Receiver):
                                              rollout_complete=False):
         data = copy(self.template)
 
-        header = f"*{self.cluster_name} deployment " \
+        header = f"*{self.cluster_name} " \
             f"{deployment.metadata.namespace}/{deployment.metadata.name}" \
             f" is rolling out an update.*"
         message = ''

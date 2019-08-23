@@ -40,12 +40,13 @@ def main_loop(receivers):
     event_types = ['ADDED', 'MODIFIED']
 
     while True:
+
         pods = core.list_deployment_for_all_namespaces(watch=False)
         resource_version = pods.metadata.resource_version
         stream = watch.Watch().stream(core.list_deployment_for_all_namespaces,
                                       resource_version=resource_version)
-
         print("Waiting for deployment events to come in..")
+        
         for event in stream:
             # Event type
             # ADDED | MODIFIED | DELETED
@@ -68,7 +69,6 @@ def main_loop(receivers):
             annotation_receiver = annotations.get(ANNOTATION_RECEIVER)
 
             print(f"got event for {deployment.metadata.namespace}/{deployment.metadata.name}")
-
             for receiver in receivers:
                 receiver.handle_event(annotation_team,
                                       annotation_receiver,

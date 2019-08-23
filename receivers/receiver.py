@@ -1,3 +1,10 @@
+ROLLOUT_COMPLETE = 1
+ROLLOUT_PROGRESSING = 2
+ROLLOUT_DEGRADED = 3
+ROLLOUT_FAILURE = 4
+ROLLOUT_UNKNOWN = 5
+
+
 class Receiver(object):
 
     NAME = "receiver"
@@ -11,57 +18,85 @@ class Receiver(object):
         self.progress_image = images['progress']
 
         self.rollouts = {}
-        self.degraded = set()
 
         self.channel = None
 
+    # See https://kubernetes.io/docs/concepts/workloads/controllers/deployment/
+    # Type=Available with Status=True: means that your Deployment has minimum availability
+    # Type=Progressing with Status=True means that your Deployment is either in the middle
+    #     of a rollout and it is progressing or that it has successfully
+    # Reason=NewReplicaSetAvailable means that the Deployment is complete
+    #
+    #
+    # Returns:
+    #   Progressing 
+    #   Failure
+    #   Success
+    def _rollout_status(self, replicas, ready_replicas, conditions):
+        if not conditions:
+            return ROLLOUT_UNKNOWN, "", ""
+
+        for condition in conditions:
+            if condition.type == "ReplicaFailure":
+                rollout = ROLLOUT_FAILURE
+                reason = condition.reason
+                message = conditoin.message
+                return (ROLLOUT_FAILURE, conditoin.reason, conditoin.message)
+            if condition.type == "Available" and condition.reason == "MinimumReplicasUnAvailable":
+                return (ROLLOUT_DEGRADED, condition.reason, condition.message)
+            if condition.type == "Progressing":
+                if condition.status == True:
+                    if condition.reason == "NewReplicaSetAvailable":
+                        return (ROLLOUT_COMPLETE, condition.reason, condition.message)
+                    else:
+                        return (ROLLOUT_PROGRESSING, condition.reason, condition.message)
+
+        return ROLLOUT_UNKNOWN, "", ""
+
     def _handle_deployment_change(self, deployment):
         metadata = deployment.metadata
-        deployment_key = f"{metadata.namespace}/{metadata.name}"
+        deployment_key = f"{metadata.creation_timestamp}/{metadata.namespace}/{metadata.name}"
 
-        ready_replicas = 0
-        if deployment.status.ready_replicas is not None:
-            ready_replicas = deployment.status.ready_replicas
+        reason = "" 
 
-        rollout_complete = (
-                deployment.status.updated_replicas ==
-                deployment.status.replicas ==
-                ready_replicas)
+        replicas = deployment.status.replicas or 0
+        ready_replicas = deployment.status.ready_replicas or 0
 
-        if deployment_key not in self.rollouts and \
-                deployment.status.updated_replicas is None:
-            # This is a new deployment
+        print(deployment.status)
+        rollout_status, reason, message = self._rollout_status(replicas, ready_replicas, deployment.status.conditions)
+        print(rollout_status, reason, message)
+
+        return 
+
+        if deployment_key not in self.rollouts: 
+
             blocks = self._generate_deployment_rollout_message(deployment)
             self.rollouts[deployment_key] = self._send_message(
                 channel=self.channel, data=blocks)
-        elif ready_replicas < deployment.spec.replicas:
-            # The deployment is degraded (less replicas than expected)
+
+        elif rollout_status == ROLLOUT_DEGRADED:
             blocks = self._generate_deployment_degraded_message(deployment)
             self._send_message(
                 channel=self.rollouts[deployment_key][1],
                 message_id=self.rollouts[deployment_key][0], data=blocks)
 
-            self.degraded.add(deployment_key)
-
-        elif (deployment_key in self.degraded and
-              ready_replicas >= deployment.spec.replicas):
-            # The deployment iwas degraded, but isn't any longer
-            self.degraded.remove(deployment_key)
+        elif rollout_status == ROLLOUT_PROGRESSING:
             blocks = self._generate_deployment_not_degraded_message(deployment)
 
             self._send_message(
                 channel=self.rollouts[deployment_key][1],
                 message_id=self.rollouts[deployment_key][0], data=blocks)
 
-        # FIXME: We can probably skip this
-        if deployment_key in self.rollouts and rollout_complete:
-            # The deployment is complete and OK
-            blocks = self._generate_deployment_rollout_message(deployment, rollout_complete)
+        elif rollout_status == ROLLOUT_COMPLETE:
+            blocks = self._generate_deployment_not_degraded_message(deployment)
+            blocks = self._generate_deployment_rollout_message(deployment, True)
             self._send_message(
                 channel=self.rollouts[deployment_key][1],
                 message_id=self.rollouts[deployment_key][0], data=blocks)
 
             self.rollouts.pop(deployment_key)
+        elif rollout_status == ROLLOUT_FAILURE:
+            print("FAILURE")
 
     def _should_handle(self, team, receiver):
         return True if self.team == team and self.NAME == receiver \

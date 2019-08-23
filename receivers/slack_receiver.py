@@ -60,7 +60,7 @@ class SlackReceiver(Receiver):
                                              rollout_complete=False):
 
         block = copy(self.template)
-        header = f"*{self.cluster_name} deployment " \
+        header = f"*{self.cluster_name} " \
             f"{deployment.metadata.namespace}/{deployment.metadata.name}" \
             f" is rolling out an update.*"
         message = ''
@@ -87,7 +87,7 @@ class SlackReceiver(Receiver):
 
         block = copy(self.template)
 
-        header = f"*{self.cluster_name} deployment " \
+        header = f"*{self.cluster_name} " \
             f"{deployment.metadata.namespace}/{deployment.metadata.name}" \
             f" has become degraded.*"
 
@@ -109,7 +109,7 @@ class SlackReceiver(Receiver):
     def _generate_deployment_not_degraded_message(self, deployment):
         block = copy(self.template)
 
-        header = f"*{self.cluster_name} deployment " \
+        header = f"*{self.cluster_name} " \
             f"{deployment.metadata.namespace}/{deployment.metadata.name}" \
             f" is no longer in a degraded state.*"
 
