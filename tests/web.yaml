@@ -1,0 +1,42 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    kube-lookout/enabled: "true"
+    kube-lookout/team: satoshi 
+    kube-lookout/receiver: flowdock 
+  labels:
+    run: web
+  name: web
+  namespace: default
+spec:
+  replicas: 15
+  selector:
+    matchLabels:
+      run: web
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        run: web
+    spec:
+      containers:
+      - image: gcr.io/google-samples/hello-app:1.0
+        imagePullPolicy: IfNotPresent
+        name: web
+        ports:
+        - containerPort: 8080
+          protocol: TCP
+        resources: {}
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext: {}
+      terminationGracePeriodSeconds: 30

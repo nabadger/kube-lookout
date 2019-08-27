@@ -56,11 +56,12 @@ class SlackReceiver(Receiver):
 
         return response.data['ts'], response.data['channel']
 
-    def _generate_deployment_rollout_message(self, deployment,
-                                             rollout_complete=False):
+    def _generate_deployment_message(self, deployment, replicas,
+                                     ready_replicas, reason, message,
+                                     rollout_status):
 
         block = copy(self.template)
-        header = f"*{self.cluster_name} deployment " \
+        header = f"*{self.cluster_name} " \
             f"{deployment.metadata.namespace}/{deployment.metadata.name}" \
             f" is rolling out an update.*"
         message = ''
@@ -68,63 +69,22 @@ class SlackReceiver(Receiver):
             message += f"Container {container.name} has image " \
                 f"_ {container.image} _\n"
         message += "\n"
-        message += f"{deployment.status.updated_replicas} replicas " \
+        message += f"{ready_replicas} replicas " \
             f"updated out of " \
-            f"{deployment.spec.replicas}, {deployment.status.ready_replicas}" \
-            f" ready.\n\n"
-        message += utils.generate_progress_bar(
-            deployment.status.updated_replicas, deployment.spec.replicas)
+            f"{replicas}\n\n"
+
+        message += utils.generate_progress_bar(ready_replicas, replicas)
 
         block[0]['text']['text'] = header
         block[1]['text']['text'] = message
-        block[1]['accessory']['image_url'] = self.progress_image
-        if rollout_complete:
-            block[1]['accessory'][
-                'image_url'] = self.ok_image
-        return block
 
-    def _generate_deployment_degraded_message(self, deployment):
-
-        block = copy(self.template)
-
-        header = f"*{self.cluster_name} deployment " \
-            f"{deployment.metadata.namespace}/{deployment.metadata.name}" \
-            f" has become degraded.*"
-
-        message = f"Deployment " \
-            f"{deployment.metadata.namespace}/{deployment.metadata.name}" \
-            f" has {deployment.status.ready_replicas} ready replicas " \
-            f"when it should have {deployment.spec.replicas}.\n"
-
-        message += utils.generate_progress_bar(deployment.status.ready_replicas,
-                                               deployment.spec.replicas)
-
-        block[0]['text']['text'] = header
-        block[1]['text']['text'] = message
-        block[1]['accessory'][
-            'image_url'] = self.warning_image
-
-        return block
-
-    def _generate_deployment_not_degraded_message(self, deployment):
-        block = copy(self.template)
-
-        header = f"*{self.cluster_name} deployment " \
-            f"{deployment.metadata.namespace}/{deployment.metadata.name}" \
-            f" is no longer in a degraded state.*"
-
-        message = f"Deployment " \
-            f"{deployment.metadata.namespace}/{deployment.metadata.name}" \
-            f" has {deployment.status.ready_replicas} ready " \
-            f"replicas out of " \
-            f"{deployment.spec.replicas}.\n"
-
-        message += utils.generate_progress_bar(deployment.status.ready_replicas,
-                                               deployment.spec.replicas)
-
-        block[0]['text']['text'] = header
-        block[1]['text']['text'] = message
-        block[1]['accessory'][
-            'image_url'] = self.ok_image
+        if self.rollout_complete(rollout_status):
+            block[1]['accessory']['image_url'] = self.ok_image
+        elif self.rollout_progressing(rollout_status):
+            block[1]['accessory']['image_url'] = self.progress_image
+        elif self.rollout_degraded(rollout_status):
+            block[1]['accessory']['image_url'] = self.warning_image
+        else:
+            block[1]['accessory']['image_url'] = self.warning_image
 
         return block
