@@ -17,7 +17,7 @@ class FlowdockReceiver(Receiver):
         "thread": {
             "title": "thread-title",
             "body": "body-html",
-            "external_url": "https://url-from-annotation.example.com",
+            "external_url": "",
             "status": {
                 "value": "Deploying...",
                 "color": "red",
@@ -70,17 +70,19 @@ class FlowdockReceiver(Receiver):
 
         replica_status = f"{ready_replicas}/{replicas}"
         message = f"{reason} - {message}</br>"
+        message += f"Number of replicas - <b>{ready_replicas}/{replicas}</b></br>"
 
-        for container in deployment.spec.template.spec.containers:
-            message += f"Deploying container <b>{container.image}</b></br>" \
-                    f"Number of replicas - <b>{ready_replicas}/{replicas}</b>"
+        if self.rollout_complete(rollout_status):
+            ingress_url = self.ingress_url(deployment)
+            if ingress_url:
+                message += f"Deployed to: <a href=\"{ingress_url}\">{ingress_url}</a></br>"
 
         header = f"[{replica_status}] [{self.cluster_name.upper()}]" \
             f" [{deployment.metadata.namespace}/{deployment.metadata.name}]"
 
         data["thread"]["title"] = header
         data["thread"]["body"] = message
-
+        data["thread"]["external_url"] = self.pipeline_url(deployment)
 
         if self.rollout_complete(rollout_status):
             data["thread"]["status"]["value"] = 'DEPLOYED'
@@ -93,6 +95,7 @@ class FlowdockReceiver(Receiver):
             data["thread"]["status"]["color"] = 'red'
         else:
             print("Hmm unknown status")
+            # FIXME
         data['resource_uid'] = deployment.metadata.uid
 
         return data

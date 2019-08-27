@@ -46,7 +46,7 @@ def main_loop(receivers):
         stream = watch.Watch().stream(core.list_deployment_for_all_namespaces,
                                       resource_version=resource_version)
         print("Waiting for deployment events to come in..")
-        
+
         for event in stream:
             # Event type
             # ADDED | MODIFIED | DELETED

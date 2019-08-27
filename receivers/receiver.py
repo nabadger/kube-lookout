@@ -35,6 +35,14 @@ class Receiver(object):
     def rollout_unknown(self, status):
         return status == self._ROLLOUT_UNKNOWN
 
+    def pipeline_url(self, deployment):
+        annotations = deployment.metadata.annotations
+        return annotations.get("kube-lookout/pipeline-url")
+
+    def ingress_url(self, deployment):
+        annotations = deployment.metadata.annotations
+        return annotations.get("kube-lookout/ingress-url")
+
     # See https://kubernetes.io/docs/concepts/workloads/controllers/deployment/
     def _rollout_status(self, replicas, ready_replicas, conditions):
         if not conditions:
@@ -50,7 +58,7 @@ class Receiver(object):
                 if replicas == ready_replicas:
                     return (self._ROLLOUT_COMPLETE, condition.reason,
                             condition.message)
- 
+
                 if condition.reason == 'MinimumReplicasUnavailable':
                     return (self._ROLLOUT_DEGRADED,
                             condition.reason,
