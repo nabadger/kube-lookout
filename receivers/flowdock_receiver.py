@@ -37,7 +37,7 @@ class FlowdockReceiver(Receiver):
         # FIXME: channel not used here
         item_id = data.get('resource_uid')
         author = data.get('author')
-        title = "deploy monitor"
+        title = "deployment monitor"
         item = data.get("thread")
         data['external_thread_id'] = item_id
 
