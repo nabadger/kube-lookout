@@ -63,94 +63,37 @@ class FlowdockReceiver(Receiver):
         # FIXME - this is not ideal
         return item_id, item_id
 
-    def _generate_deployment_rollout_message(self, deployment,
-                                             rollout_complete=False):
+    def _generate_deployment_message(self, deployment, replicas,
+                                     ready_replicas, reason, message,
+                                     rollout_status):
         data = copy(self.template)
 
-        header = f"*{self.cluster_name} " \
-            f"{deployment.metadata.namespace}/{deployment.metadata.name}" \
-            f" is rolling out an update.*"
-        message = ''
+        replica_status = f"{ready_replicas}/{replicas}"
+        message = f"{reason} - {message}</br>"
 
         for container in deployment.spec.template.spec.containers:
-            message += f"Container {container.name} has image " \
-                f"<b>{container.image}</b>"
+            message += f"Deploying container <b>{container.image}</b></br>" \
+                    f"Number of replicas - <b>{ready_replicas}/{replicas}</b>"
 
-            message += "<br>"
-            message += f"{deployment.status.updated_replicas} replicas " \
-                f"updated out of " \
-                f"{deployment.spec.replicas}, {deployment.status.ready_replicas}" \
-                f" ready.<br><br."
-
-        replicas = f"{deployment.status.ready_replicas}/{deployment.spec.replicas}"
-
-        header = f"[{replicas}] {self.cluster_name.upper()}: deployment " \
-            f"{deployment.metadata.namespace}/{deployment.metadata.name}"
+        header = f"[{replica_status}] [{self.cluster_name.upper()}]" \
+            f" [{deployment.metadata.namespace}/{deployment.metadata.name}]"
 
         data["thread"]["title"] = header
         data["thread"]["body"] = message
 
-        if rollout_complete:
+
+        if self.rollout_complete(rollout_status):
             data["thread"]["status"]["value"] = 'DEPLOYED'
             data["thread"]["status"]["color"] = 'green'
-        else:
-            data["thread"]["status"]["value"] = 'DEPLOYING'
+        elif self.rollout_progressing(rollout_status):
+            data["thread"]["status"]["value"] = 'PROGRESSING'
             data["thread"]["status"]["color"] = 'blue'
-
+        elif self.rollout_degraded(rollout_status):
+            data["thread"]["status"]["value"] = 'DEGRADED'
+            data["thread"]["status"]["color"] = 'red'
+        else:
+            print("Hmm unknown status")
         data['resource_uid'] = deployment.metadata.uid
 
         return data
 
-    def _generate_deployment_degraded_message(self, deployment):
-
-        ready_replicas = int(deployment.status.ready_replicas) \
-            if deployment.status.ready_replicas else 0
-
-        replicas = f"{ready_replicas}/{deployment.spec.replicas}"
-
-        header = f"[{replicas}] {self.cluster_name.upper()}: deployment " \
-            f"{deployment.metadata.namespace}/{deployment.metadata.name}"
-
-        message = f"Deployment " \
-            f"{deployment.metadata.namespace}/{deployment.metadata.name}" \
-            f" has {ready_replicas} ready replicas " \
-            f"when it should have {deployment.spec.replicas}.<br>"
-
-        data = copy(self.template)
-        data["title"] = header
-        data["thread"]["title"] = header
-        data["thread"]["body"] = message
-
-        data["thread"]["status"]["value"] = 'DEGRADED'
-        data["thread"]["status"]["color"] = 'red'
-
-        data['resource_uid'] = deployment.metadata.uid
-
-        return data
-
-    def _generate_deployment_not_degraded_message(self, deployment):
-        ready_replicas = int(deployment.status.ready_replicas) \
-            if deployment.status.ready_replicas else 0
-
-        replicas = f"{ready_replicas}/{deployment.spec.replicas}"
-
-        header = f"[{replicas}] {self.cluster_name.upper()}: deployment " \
-            f"{deployment.metadata.namespace}/{deployment.metadata.name}" \
-                f" is no longer in a degraded state"
-
-        message = f"Deployment " \
-            f"{deployment.metadata.namespace}/{deployment.metadata.name}" \
-            f" has {ready_replicas} ready replicas " \
-            f"out of {deployment.spec.replicas}.<br>"
-
-        data = copy(self.template)
-        data["title"] = header
-        data["thread"]["title"] = header
-        data["thread"]["body"] = message
-
-        data["thread"]["status"]["value"] = 'DEPLOYING'
-        data["thread"]["status"]["color"] = 'blue'
-
-        data['resource_uid'] = deployment.metadata.uid
-
-        return data
