@@ -111,7 +111,4 @@ class Receiver(object):
 
     def handle_event(self, team, receiver, deployment):
         if self._should_handle(team, receiver):
-            print("Receiver '%s' handling event for team '%s'" % (receiver,
-                                                                  team))
-
             self._handle_deployment_change(deployment)
