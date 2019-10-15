@@ -70,12 +70,16 @@ class FlowdockReceiver(Receiver):
 
         replica_status = f"{ready_replicas}/{replicas}"
         message = f"{reason} - {message}</br>"
-        message += f"Number of replicas - <b>{ready_replicas}/{replicas}</b></br>"
+        message += f"Number of replicas - <b>{ready_replicas}/{replicas}</b></br></br>"
+
+        for container in deployment.spec.template.spec.containers:
+            message += f"Container {container.name} has image " \
+                f"{container.image} </br>"
 
         if self.rollout_complete(rollout_status):
             ingress_url = self.ingress_url(deployment)
             if ingress_url:
-                message += f"Deployed to: <a href=\"{ingress_url}\">{ingress_url}</a></br>"
+                message += f"</br>Deployed to: <a href=\"{ingress_url}\">{ingress_url}</a></br>"
 
         header = f"[{replica_status}] [{self.cluster_name.upper()}]" \
             f" [{deployment.metadata.namespace}/{deployment.metadata.name}]"
@@ -99,4 +103,3 @@ class FlowdockReceiver(Receiver):
         data['resource_uid'] = deployment.metadata.uid
 
         return data
-
