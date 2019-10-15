@@ -71,7 +71,7 @@ Notifications will be sent to all matching routes.
 
 The config file supports Python's string formatting.
 
-In the example, *${LEGACY_SLACK_TOKEN}* will be replaced by any matching environment variable with the same name. 
+In the example, *{LEGACY_SLACK_TOKEN}* will be replaced by any matching environment variable with the same name. 
 
 This is supported for any yaml value.
 
