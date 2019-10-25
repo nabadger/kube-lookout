@@ -35,7 +35,7 @@ def main_loop(receivers):
     else:
         config.load_kube_config()
     api_client = client.api_client.ApiClient()
-    core = client.ExtensionsV1beta1Api(api_client)
+    core = client.AppsV1Api(api_client)
 
     event_types = ['ADDED', 'MODIFIED']
 
@@ -45,7 +45,6 @@ def main_loop(receivers):
         resource_version = pods.metadata.resource_version
         stream = watch.Watch().stream(core.list_deployment_for_all_namespaces,
                                       resource_version=resource_version)
-
         for event in stream:
             # Event type
             # ADDED | MODIFIED | DELETED

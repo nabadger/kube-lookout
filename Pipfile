@@ -4,7 +4,7 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
-kubernetes = "==9.0.0"
+kubernetes = "==10.0.0"
 slackclient = "==2.0.0"
 pytest = "*"
 flowdock-api-wrapper = "*"
