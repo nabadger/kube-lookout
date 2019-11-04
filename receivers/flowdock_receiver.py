@@ -82,7 +82,7 @@ class FlowdockReceiver(Receiver):
                 message += f"</br>Deployed to: <a href=\"{ingress_url}\">{ingress_url}</a></br>"
 
         header = f"[{replica_status}] [{self.cluster_name.upper()}]" \
-            f" [{deployment.metadata.namespace}/{deployment.metadata.name}]"
+            f" [{deployment.metadata.generation}/{deployment.metadata.namespace}/{deployment.metadata.name}]"
 
         data["thread"]["title"] = header
         data["thread"]["body"] = message

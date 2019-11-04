@@ -75,7 +75,7 @@ class Receiver(object):
 
     def _handle_deployment_change(self, deployment):
         metadata = deployment.metadata
-        deployment_key = f"{metadata.creation_timestamp}/{metadata.namespace}/{metadata.name}"
+        deployment_key = f"{metadata.generation}/{metadata.namespace}/{metadata.name}"
 
         reason = ""
 
