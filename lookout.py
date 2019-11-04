@@ -58,6 +58,11 @@ def main_loop(receivers):
             # Parse out annotations
             annotations = deployment.metadata.annotations
 
+            # Skip if we have none - this generally means the deployment does not
+            # exist.
+            if not annotations:
+                continue
+
             # Skip watching this deployment unless we've enabled it explicity
             if annotations.get(ANNOTATION_ENABLED) != "true":
                 continue
