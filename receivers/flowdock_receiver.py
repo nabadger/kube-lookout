@@ -71,6 +71,8 @@ class FlowdockReceiver(Receiver):
         replica_status = f"{ready_replicas}/{replicas}"
         message = f"{reason} - {message}</br>"
         message += f"Number of replicas - <b>{ready_replicas}/{replicas}</b></br></br>"
+        deployment_key = f"{deployment.metadata.generation}/{deployment.metadata.namespace}/{deployment.metadata.name}"
+        header = f"{deployment.metadata.name}"
 
         for container in deployment.spec.template.spec.containers:
             message += f"Container {container.name} has image " \
@@ -81,8 +83,7 @@ class FlowdockReceiver(Receiver):
             if ingress_url:
                 message += f"</br>Deployed to: <a href=\"{ingress_url}\">{ingress_url}</a></br>"
 
-        header = f"[{replica_status}] [{self.cluster_name.upper()}]" \
-            f" [{deployment.metadata.generation}/{deployment.metadata.namespace}/{deployment.metadata.name}]"
+        header = f"[{replica_status}] [{self.cluster_name.upper()}][{header}]"
 
         data["thread"]["title"] = header
         data["thread"]["body"] = message
@@ -100,6 +101,7 @@ class FlowdockReceiver(Receiver):
         else:
             print("Hmm unknown status")
             # FIXME
-        data['resource_uid'] = deployment.metadata.uid
+
+        data['resource_uid'] = deployment_key
 
         return data
