@@ -11,14 +11,21 @@ class Receiver(object):
         self.ok_image = images['ok']
 
         self.rollouts = {}
+        self.previous_rollout_status = {}
+        self.previous_rollout_generation = {}
 
         self.channel = None
+        
+        self._ROLLOUT_CREATED = 1
+        self._ROLLOUT_COMPLETE = 2
+        self._ROLLOUT_PROGRESSING = 3
+        self._ROLLOUT_DEGRADED = 4
+        self._ROLLOUT_FAILURE = 5
+        self._ROLLOUT_UNKNOWN = 6
 
-        self._ROLLOUT_COMPLETE = 1
-        self._ROLLOUT_PROGRESSING = 2
-        self._ROLLOUT_DEGRADED = 3
-        self._ROLLOUT_FAILURE = 4
-        self._ROLLOUT_UNKNOWN = 5
+
+    def rollout_created(self, status):
+        return status == self._ROLLOUT_CREATED
 
     def rollout_complete(self, status):
         return status == self._ROLLOUT_COMPLETE
@@ -44,54 +51,92 @@ class Receiver(object):
         return annotations.get("kube-lookout/ingress-url")
 
     # See https://kubernetes.io/docs/concepts/workloads/controllers/deployment/
-    def _rollout_status(self, replicas, ready_replicas, conditions):
+    def _rollout_status(self, conditions,
+                        wanted_replicas,
+                        updated_replicas,
+                        unavailable_replicas):
+
         if not conditions:
             return self._ROLLOUT_UNKNOWN, "", ""
+            
+        last_condition = conditions[-1]
 
-        for condition in conditions:
+        print("%s - %s - %s" % (last_condition.type, last_condition.message, last_condition.reason))
 
-            if condition.status == 'False':
-                return (self._ROLLOUT_DEGRADED, condition.reason,
-                        condition.message)
+        if last_condition.type == 'ReplicaFailure':
+            return (self._ROLLOUT_FAILURE, last_condition.reason,
+                    last_condition.message)
 
-            if condition.type in ('Available', 'Progressing'):
-                if replicas == ready_replicas:
-                    return (self._ROLLOUT_COMPLETE, condition.reason,
-                            condition.message)
+        if last_condition.reason == 'NewReplicaSetCreated':
+            return (self._ROLLOUT_CREATED,
+                    last_condition.reason,
+                    last_condition.message)
 
-                if condition.reason == 'MinimumReplicasUnavailable':
-                    return (self._ROLLOUT_DEGRADED,
-                            condition.reason,
-                            condition.message)
+        if last_condition.reason == 'NewReplicaSetAvailable':
+            return (self._ROLLOUT_COMPLETE,
+                    last_condition.reason,
+                    last_condition.message)
 
-                else:
-                    return (self._ROLLOUT_PROGRESSING,
-                            condition.reason,
-                            condition.message)
+        if last_condition.reason == 'MinimumReplicasUnavailable':
+            if not unavailable_replicas and (wanted_replicas == updated_replicas):
+                return (self._ROLLOUT_COMPLETE,
+                    last_condition.reason,
+                    last_condition.message)
+            else:
+                return (self._ROLLOUT_DEGRADED,
+                        last_condition.reason,
+                        last_condition.message)
 
-            if condition.type == 'ReplicaFailure':
-                return (self._ROLLOUT_FAILURE, condition.reason,
-                        condition.message)
+        else:
+            return (self._ROLLOUT_PROGRESSING,
+                    last_condition.reason,
+                    last_condition.message)
 
     def _handle_deployment_change(self, deployment):
         metadata = deployment.metadata
-        deployment_key = f"{metadata.generation}/{metadata.namespace}/{metadata.name}"
+        deployment_key = f"{metadata.namespace}/{metadata.name}"
 
-        reason = ""
-
-        replicas = deployment.spec.replicas or 0
+        wanted_replicas = deployment.spec.replicas or 0
+        updated_replicas = deployment.status.updated_replicas or 0
         ready_replicas = deployment.status.ready_replicas or 0
+        unavailable_replicas = deployment.status.unavailable_replicas or 0
+        available_new_replicas = updated_replicas - unavailable_replicas
+
+        generation = deployment.status.observed_generation or 0
+
+        latest_condition_message = "%s" % (deployment.status.conditions[-1].message)
+
+        # If this deployment generation has already completed, then skip related events
+        # events.
+        if generation <= self.previous_rollout_generation.get(deployment_key, 0):
+            return
+
+        # If we've already sent a message for this deployment with the same status,
+        # skip it.
+        if self.previous_rollout_status.get(deployment_key) == latest_condition_message:
+            if wanted_replicas != updated_replicas:
+                return
+
+        self.previous_rollout_status[deployment_key] = latest_condition_message
+
+        print(deployment.status)
+        print(latest_condition_message)
+        print(self.previous_rollout_status)
 
         rollout_status, reason, message = \
-            self._rollout_status(replicas,
-                                 ready_replicas,
-                                 deployment.status.conditions)
+            self._rollout_status(deployment.status.conditions,
+                                 wanted_replicas,
+                                 updated_replicas,
+                                 unavailable_replicas)
 
+        # Skip any unknown rollout status
         if self.rollout_unknown(rollout_status):
             return
 
-        blocks = self._generate_deployment_message(deployment, replicas,
-                                                   ready_replicas, reason,
+        # Generate message
+        blocks = self._generate_deployment_message(deployment, reason, wanted_replicas,
+                                                   ready_replicas,
+                                                   available_new_replicas,
                                                    message, rollout_status)
 
         if deployment_key not in self.rollouts:
@@ -102,8 +147,12 @@ class Receiver(object):
                 channel=self.rollouts[deployment_key][1],
                 message_id=self.rollouts[deployment_key][0], data=blocks)
 
+
         if self.rollout_complete(rollout_status):
             self.rollouts.pop(deployment_key)
+            self.previous_rollout_status.pop(deployment_key)
+            self.previous_rollout_generation[deployment_key] = generation
+
 
     def _should_handle(self, team, receiver):
         return True if self.team == team and self.NAME == receiver \

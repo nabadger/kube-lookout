@@ -63,19 +63,18 @@ class FlowdockReceiver(Receiver):
         # FIXME - this is not ideal
         return item_id, item_id
 
-    def _generate_deployment_message(self, deployment, replicas,
-                                     ready_replicas, reason, message,
+    def _generate_deployment_message(self, deployment, reason, wanted_replicas,
+                                     ready_replicas, available_new_replicas, message,
                                      rollout_status):
         data = copy(self.template)
 
-        replica_status = f"{ready_replicas}/{replicas}"
-        message = f"{reason} - {message}</br>"
-        message += f"Number of replicas - <b>{ready_replicas}/{replicas}</b></br></br>"
+        replica_status = f"{available_new_replicas}/{ready_replicas}/{wanted_replicas}"
+        message = f"{reason} - {message}</br></br>"
         deployment_key = f"{deployment.metadata.generation}/{deployment.metadata.namespace}/{deployment.metadata.name}"
         header = f"{deployment.metadata.name}"
 
         for container in deployment.spec.template.spec.containers:
-            message += f"Container {container.name} has image " \
+            message += f"Container \"{container.name}\" using image " \
                 f"{container.image} </br>"
 
         if self.rollout_complete(rollout_status):
@@ -89,7 +88,10 @@ class FlowdockReceiver(Receiver):
         data["thread"]["body"] = message
         data["thread"]["external_url"] = self.pipeline_url(deployment)
 
-        if self.rollout_complete(rollout_status):
+        if self.rollout_created(rollout_status):
+            data["thread"]["status"]["value"] = 'CREATED'
+            data["thread"]["status"]["color"] = 'orange'
+        elif self.rollout_complete(rollout_status):
             data["thread"]["status"]["value"] = 'DEPLOYED'
             data["thread"]["status"]["color"] = 'green'
         elif self.rollout_progressing(rollout_status):

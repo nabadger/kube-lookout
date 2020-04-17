@@ -50,7 +50,6 @@ def main_loop(receivers):
             # ADDED | MODIFIED | DELETED
             event_type = event['type']
             deployment = event['object']
-
             # We only care about new/updated events (for now)
             if event_type not in event_types:
                 continue
